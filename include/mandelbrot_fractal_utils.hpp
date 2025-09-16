@@ -21,6 +21,10 @@ struct RgbColor {
     std::uint8_t r;
     std::uint8_t g;
     std::uint8_t b;
+
+    constexpr bool operator==(const RgbColor& other) const noexcept {
+        return r == other.r && g == other.g && b == other.b;
+    }
 };
 
 struct RgbColors {

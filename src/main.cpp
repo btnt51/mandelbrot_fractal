@@ -27,7 +27,18 @@ private:
 
 class WaitForFPS {
 public:
+    WaitForFPS(FrameClock& frame_clock, uint32_t fps) : frame_clock_(frame_clock), frame_time_(1s / std::max(1u, fps)) {}
 
+    void operator()(){
+        if (auto elapsed = frame_clock_.GetFrameTime(); elapsed < frame_time_) {
+            std::this_thread::sleep_for(frame_time_ - elapsed);
+        }
+        frame_clock_.Reset();
+    }
+
+private:
+    FrameClock& frame_clock_;
+    std::chrono::milliseconds frame_time_;
 };
 
 class MandelbrotApp {
@@ -48,7 +59,7 @@ public:
 
         image_.create(render_settings_.width, render_settings_.height);
         texture_.create(render_settings_.width, render_settings_.height);
-
+        sprite_.setTexture(texture_);
         window_.setKeyRepeatEnabled(false);
     }
 
@@ -57,7 +68,7 @@ public:
         sf::Clock zoom_clock;
 
         auto pipeline = SfmlEventHandler{window_, render_settings_, state_, zoom_clock} |  //
-                        stdexec::let_value([this]() {                                      //
+                        stdexec::let_value([this](auto&&...) {                                      //
                             return CalculateMandelbrotAsyncSender{state_, render_settings_, renderer_};
                         }) |
                         stdexec::let_value([this](RenderResult data) {
@@ -65,10 +76,10 @@ public:
                         }) |  //
                         stdexec::then(WaitForFPS{frame_clock, 60});
 
-        auto repeated_pipeline =
-            std::move(pipeline) | stdexec::then([this]() { return state_.should_exit; }) | exec::repeat_effect_until();
+        auto repeated_pipeline = pipeline |
+            stdexec::then([this]() { return state_.should_exit; }) | exec::repeat_effect_until();
 
-        stdexec::sync_wait(std::move(repeated_pipeline));
+        stdexec::sync_wait(repeated_pipeline);
     }
 };
 
